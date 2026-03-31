@@ -53,20 +53,23 @@ function App() {
     // --- WEBSOCKET ENGINE ---
     const { simState, connectionStatus, sendCommand } = useMSFS(userPin, pagesData);
 
-    // --- THEME SIDE EFFECT ---
+   // --- THEME SIDE EFFECT ---
     useEffect(() => {
         localStorage.setItem('efb_theme', theme);
         
-        document.body.classList.remove('theme-retro', 'theme-retro-green', 'theme-retro-blue');
+        // Strip ALL possible theme classes before applying the new one
+        document.body.classList.remove('theme-retro', 'theme-retro-green', 'theme-retro-blue', 'theme-retro-amber');
         
         if (theme === 'retro-green') {
             document.body.classList.add('theme-retro', 'theme-retro-green');
         } else if (theme === 'retro-blue') {
             document.body.classList.add('theme-retro', 'theme-retro-blue');
+        } else if (theme === 'retro-amber') {
+            document.body.classList.add('theme-retro', 'theme-retro-amber');
         }
     }, [theme]);
 
-    const themes = ['modern', 'retro-green', 'retro-blue'];
+    const themes = ['modern', 'retro-green', 'retro-blue', 'retro-amber'];
     const cycleTheme = (direction) => {
         setTheme(prev => {
             let currentIndex = themes.indexOf(prev);

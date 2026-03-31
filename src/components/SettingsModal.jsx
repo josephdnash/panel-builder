@@ -4,6 +4,7 @@ export default function SettingsModal({ isOpen, onClose, userPin, onUnpair, onLo
     let themeNameDisplay = "MODERN UI";
     if (theme === 'retro-green') themeNameDisplay = "RETRO GREEN";
     if (theme === 'retro-blue') themeNameDisplay = "RETRO BLUE";
+    if (theme === 'retro-amber') themeNameDisplay = "RETRO AMBER";
 
     return (
         <div className="overlay" style={{ zIndex: 10000 }}>
