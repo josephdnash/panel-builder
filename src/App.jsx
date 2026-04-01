@@ -20,7 +20,7 @@ import { polyfill } from "mobile-drag-drop";
 import "mobile-drag-drop/default.css"; 
 
 polyfill({
-    holdToDrag: 250 
+    holdToDrag: 100 
 });
 
 window.addEventListener('touchmove', function() {}, {passive: false});
