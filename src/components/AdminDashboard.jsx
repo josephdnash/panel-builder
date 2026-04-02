@@ -34,8 +34,7 @@ export default function AdminDashboard({ onClose }) {
         return () => unsubscribe();
     }, []);
 
-    // 3. Combine Users and Roles into the Table Data
-    // This runs automatically anytime Firebase sends an update to either Users OR Roles!
+// 3. Combine Users and Roles into the Table Data
     useEffect(() => {
         let totalUsers = 0;
         let totalBeta = 0;
@@ -49,27 +48,31 @@ export default function AdminDashboard({ onClose }) {
             const userRole = rawRoles[uid] || 'user';
             if (userRole === 'beta') totalBeta++;
             
-            // Calculate Layouts and Buttons
             let layoutCount = 0;
             let totalButtons = 0;
             
-            if (userData.layouts) {
-                const layoutNames = Object.keys(userData.layouts);
-                layoutCount = layoutNames.length;
+            // THE FIX: Use the user's active profiles as the source of truth, 
+            // completely ignoring any orphaned "ghost" data in the layouts folder.
+            if (userData.profiles) {
+                const profileNames = Object.keys(userData.profiles);
+                layoutCount = profileNames.length;
                 totalLayouts += layoutCount;
                 
-                layoutNames.forEach(name => {
-                    const pages = userData.layouts[name];
-                    if (Array.isArray(pages)) {
-                        pages.forEach(page => {
-                            if (Array.isArray(page)) {
-                                page.forEach(cell => {
-                                    if (cell && cell.id) totalButtons++;
-                                });
-                            }
-                        });
-                    }
-                });
+                if (userData.layouts) {
+                    profileNames.forEach(name => {
+                        const pages = userData.layouts[name];
+                        // Verify the layout exists and is an array before counting
+                        if (pages && Array.isArray(pages)) {
+                            pages.forEach(page => {
+                                if (Array.isArray(page)) {
+                                    page.forEach(cell => {
+                                        if (cell && cell.id) totalButtons++;
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
             }
 
             let meanButtons = layoutCount > 0 ? (totalButtons / layoutCount).toFixed(1) : 0;
