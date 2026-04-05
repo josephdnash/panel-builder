@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { auth, database } from './utils/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { ref, set, get, onValue } from 'firebase/database';
+import { ref, set, get } from 'firebase/database';
 
+// --- COMPONENTS ---
 import AuthScreen from './components/AuthScreen';
 import PinScreen from './components/PinScreen';
 import TopBar from './components/TopBar';
@@ -13,8 +13,16 @@ import CellSettingsModal from './components/CellSettingsModal';
 import ProfileModal from './components/ProfileModal';
 import AdminDashboard from './components/AdminDashboard';
 
+// --- HOOKS ---
 import useMSFS from './hooks/useMSFS';
 import useDebouncedSave from './hooks/useDebouncedSave';
+import useAuth from './hooks/useAuth';
+import useProfiles from './hooks/useProfiles';
+import useCustomComponents from './hooks/useCustomComponents';
+import useLayoutData from './hooks/useLayoutData';
+
+// --- CONTEXTS ---
+import { useDialog } from './contexts/DialogContext'; // <-- The Dialog Hook is back!
 
 // --- MOBILE DRAG & DROP POLYFILL ---
 import { polyfill } from "mobile-drag-drop";
@@ -28,11 +36,6 @@ window.addEventListener('touchmove', function() {}, {passive: false});
 // -----------------------------------
 
 function App() {
-    // --- AUTH STATES ---
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [isAdmin, setIsAdmin] = useState(false);
-    
     // --- APP & PAIRING STATES ---
     const [userPin, setUserPin] = useState(localStorage.getItem("efb_pairing_pin") || null);
     const [isPairing, setIsPairing] = useState(false);
@@ -55,30 +58,26 @@ function App() {
     const [showAdmin, setShowAdmin] = useState(false);
     const [selectedCellIndex, setSelectedCellIndex] = useState(null);
 
-    // --- DATA STATES ---
-    const [availableProfiles, setAvailableProfiles] = useState({});
-    const [customComponents, setCustomComponents] = useState({});
-    const [pagesData, setPagesData] = useState(
-        new Array(10).fill(null).map(() => new Array(24).fill(""))
-    );
-
-    // --- WEBSOCKET ENGINE ---
+    // ==========================================
+    // --- CUSTOM DATA HOOKS & CONTEXTS ---
+    // ==========================================
+    const { user, loading, isAdmin } = useAuth();
+    const availableProfiles = useProfiles(user);
+    const customComponents = useCustomComponents(user);
+    const { pagesData, setPagesData } = useLayoutData(user, currentProfile);
     const { simState, connectionStatus, sendCommand } = useMSFS(userPin, pagesData);
+    
+    // Initialize our sleek UI dialogs!
+    const { confirm, prompt } = useDialog(); 
 
-   // --- THEME SIDE EFFECT ---
+    // --- THEME SIDE EFFECT ---
     useEffect(() => {
         localStorage.setItem('efb_theme', theme);
-        
-        // Strip ALL possible theme classes before applying the new one
         document.body.classList.remove('theme-retro', 'theme-retro-green', 'theme-retro-blue', 'theme-retro-amber');
         
-        if (theme === 'retro-green') {
-            document.body.classList.add('theme-retro', 'theme-retro-green');
-        } else if (theme === 'retro-blue') {
-            document.body.classList.add('theme-retro', 'theme-retro-blue');
-        } else if (theme === 'retro-amber') {
-            document.body.classList.add('theme-retro', 'theme-retro-amber');
-        }
+        if (theme === 'retro-green') document.body.classList.add('theme-retro', 'theme-retro-green');
+        else if (theme === 'retro-blue') document.body.classList.add('theme-retro', 'theme-retro-blue');
+        else if (theme === 'retro-amber') document.body.classList.add('theme-retro', 'theme-retro-amber');
     }, [theme]);
 
     const themes = ['modern', 'retro-green', 'retro-blue', 'retro-amber'];
@@ -91,7 +90,7 @@ function App() {
         });
     };
 
-    // --- MODE SIDE EFFECT (SAFE CLASS TOGGLE) ---
+    // --- MODE SIDE EFFECT ---
     useEffect(() => {
         if (isEditMode) {
             document.body.classList.add('edit-mode');
@@ -116,73 +115,10 @@ function App() {
         localStorage.setItem("efb_current_page", currentPage.toString());
     }, [currentProfile, currentPage]);
 
-    // --- 1. FIREBASE AUTHENTICATION ---
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            if (currentUser) {
-                setUser(currentUser);
-                await set(ref(database, `users/${currentUser.uid}/email`), currentUser.email);
-                const roleSnap = await get(ref(database, `roles/${currentUser.uid}`));
-                setIsAdmin(roleSnap.val() === 'admin');
-            } else {
-                setUser(null);
-                setIsAdmin(false);
-            }
-            setLoading(false);
-        });
-        return () => unsubscribe();
-    }, []);
 
-    // --- 2. FIREBASE PROFILE METADATA SYNC ---
-    useEffect(() => {
-        if (!user) return;
-        const profilesRef = ref(database, `users/${user.uid}/profiles`);
-        const unsubscribe = onValue(profilesRef, (snapshot) => {
-            if (snapshot.exists()) {
-                setAvailableProfiles(snapshot.val());
-            } else {
-                const defaultProfile = { Default: { name: "Default", aircraftTag: "Global" } };
-                set(profilesRef, defaultProfile);
-                setAvailableProfiles(defaultProfile);
-            }
-        });
-        return () => unsubscribe();
-    }, [user]);
-
-    // --- 3. FIREBASE LAYOUT DATA SYNC ---
-    useEffect(() => {
-        if (!user || !currentProfile) return;
-        const layoutRef = ref(database, `users/${user.uid}/layouts/${currentProfile}`);
-        const unsubscribe = onValue(layoutRef, (snapshot) => {
-            const data = snapshot.val();
-            let safePages = new Array(10).fill(null).map(() => new Array(24).fill(""));
-            if (data) {
-                for (let p = 0; p < 10; p++) {
-                    if (data[p]) {
-                        Object.keys(data[p]).forEach(key => {
-                            let index = parseInt(key);
-                            if (!isNaN(index) && index >= 0 && index < 24) safePages[p][index] = data[p][key] || "";
-                        });
-                    }
-                }
-            }
-            setPagesData(safePages);
-        });
-        return () => unsubscribe();
-    }, [user, currentProfile]);
-
-    // --- 4. FIREBASE CUSTOM COMPONENT SYNC ---
-    useEffect(() => {
-        if (!user) return;
-        const customRef = ref(database, `users/${user.uid}/customComponents`);
-        const unsubscribe = onValue(customRef, (snapshot) => {
-            if (snapshot.exists()) setCustomComponents(snapshot.val());
-            else setCustomComponents({});
-        });
-        return () => unsubscribe();
-    }, [user]);
-
+    // ==========================================
     // --- DEBOUNCED LAYOUT SAVING ---
+    // ==========================================
     const saveLayoutToCloud = useCallback((newLayoutData) => {
         if (user && currentProfile) {
             set(ref(database, `users/${user.uid}/layouts/${currentProfile}`), newLayoutData).catch(e => console.error(e));
@@ -191,7 +127,10 @@ function App() {
 
     const debouncedSaveLayout = useDebouncedSave(saveLayoutToCloud, 500);
 
+
+    // ==========================================
     // --- GRID INTERACTION HANDLERS ---
+    // ==========================================
     const handleCellClick = (index) => {
         if (isEditMode) {
             setSelectedCellIndex(index);
@@ -206,21 +145,24 @@ function App() {
                     (cellData.id === 'smart_toggle') ||
                     (cellData.baseType === 'smart_toggle');
 
-                if (isCustomizable) {
-                    setIsCellSettingsOpen(true);
-                }
+                if (isCustomizable) setIsCellSettingsOpen(true);
             } else {
                 setIsModalOpen(true);
             }
         }
     };
 
-    const handleDeleteCell = (index) => {
+    const handleDeleteCell = async (index) => {
         const cellData = pagesData[currentPage][index];
         const newPagesData = [...pagesData];
 
         if (cellData && cellData.targetPage) {
-            if (window.confirm(`Delete folder "${cellData.label}"? This will also wipe all buttons inside that folder.`)) {
+            const isConfirmed = await confirm({
+                title: "Delete Folder",
+                message: `Delete folder "${cellData.label}"? This will also wipe all buttons inside that folder.`,
+                confirmText: "Delete"
+            });
+            if (isConfirmed) {
                 newPagesData[cellData.targetPage] = new Array(24).fill(""); 
             } else {
                 return; 
@@ -246,10 +188,9 @@ function App() {
         debouncedSaveLayout(newPagesData);
     };
 
-    const assignComponent = (componentId, dictData, isCustom = false, customData = null) => {
+    const assignComponent = async (componentId, dictData, isCustom = false, customData = null) => {
         const newPagesData = [...pagesData];
         const currentPageData = [...newPagesData[currentPage]];
-        
         let computedTargetPage = undefined;
 
         if (componentId.includes('folder') || dictData.type === 'folder') {
@@ -258,14 +199,13 @@ function App() {
                 const isPointedTo = newPagesData.some(page => page.some(c => c && c.targetPage === i));
                 if (isEmpty && !isPointedTo) { computedTargetPage = i; break; }
             }
-            if (computedTargetPage === undefined) return window.alert("No more free pages available for new folders!");
+            if (computedTargetPage === undefined) {
+                await confirm({ title: "Limit Reached", message: "No more free pages available for new folders!", cancelText: null, confirmText: "OK" });
+                return;
+            }
 
             newPagesData[computedTargetPage][0] = { 
-                id: "nav_back", 
-                label: "BACK", 
-                baseType: "nav_back", 
-                type: "nav", 
-                targetPage: currentPage 
+                id: "nav_back", label: "BACK", baseType: "nav_back", type: "nav", targetPage: currentPage 
             };
         }
         else if (componentId.includes('nav_back') || dictData.baseType?.includes('nav_back') || componentId === 'nav_back') {
@@ -322,29 +262,40 @@ function App() {
         const payload = { ...componentConfig, id: customId };
         
         await set(ref(database, `users/${user.uid}/customComponents/${customId}`), payload);
-        window.alert("Saved to your Custom Library!");
+        await confirm({ title: "Success", message: "Saved to your Custom Library!", cancelText: null, confirmText: "OK" });
         setIsCellSettingsOpen(false);
         setSelectedCellIndex(null);
     };
 
     const handleDeleteFromLibrary = async (customId) => {
         if (!user) return;
-        if (window.confirm("Delete this custom component from your library? This will also remove it from your active layout.")) {
-            // 1. Delete from Firebase Custom Library
+        const isConfirmed = await confirm({ 
+            title: "Delete Custom Component", 
+            message: "Delete this custom component from your library? This will also remove it from your active layout.",
+            confirmText: "Delete"
+        });
+
+        if (isConfirmed) {
             await set(ref(database, `users/${user.uid}/customComponents/${customId}`), null);
-            
-            // 2. Cascade Delete: Scrub the active layout of any ghost cells
             const newPagesData = pagesData.map(page => 
                 page.map(cell => (cell && cell.id === customId) ? "" : cell)
             );
-            
             setPagesData(newPagesData);
             debouncedSaveLayout(newPagesData);
         }
     };
 
-    const handleUnpair = () => {
-        if (window.confirm("Are you sure you want to unpair this simulator connection?")) {
+    // ==========================================
+    // --- PROFILE / SETTINGS HANDLERS ---
+    // ==========================================
+    const handleUnpair = async () => {
+        const isConfirmed = await confirm({
+            title: "Unpair",
+            message: "Are you sure you want to unpair this simulator connection?",
+            confirmText: "Unpair"
+        });
+
+        if (isConfirmed) {
             localStorage.removeItem("efb_pairing_pin");
             setUserPin(null);
             setIsSettingsOpen(false);
@@ -352,10 +303,10 @@ function App() {
     };
 
     const handleCreateProfile = async () => {
-        let newName = window.prompt("New Layout\nEnter a name for the new layout:");
+        let newName = await prompt({ title: "New Layout", message: "Enter a name for the new layout:" });
         if (newName && newName.trim() !== "") {
             let cleanName = newName.trim();
-            let tag = window.prompt("Aircraft Tag (Optional):", "Global");
+            let tag = await prompt({ title: "Aircraft Tag", message: "Enter an Aircraft Tag (Optional):", defaultValue: "Global" });
             if (tag === null) return;
 
             await set(ref(database, `users/${user.uid}/profiles/${cleanName}`), { name: cleanName, aircraftTag: tag || "Global" });
@@ -367,18 +318,18 @@ function App() {
     };
 
     const handleDuplicateProfile = async () => {
-        let newName = window.prompt(`Duplicate Profile\nDuplicate "${currentProfile}" as:`, `${currentProfile} V2`);
+        let newName = await prompt({ title: "Duplicate Profile", message: `Duplicate "${currentProfile}" as:`, defaultValue: `${currentProfile} V2` });
         if (newName && newName.trim() !== "") {
             let cleanName = newName.trim();
             let existingTag = availableProfiles[currentProfile]?.aircraftTag || "Global";
 
             if (availableProfiles[cleanName]) {
-                if (!window.confirm(`A profile named "${cleanName}" already exists. Overwrite it?`)) return;
+                const overwrite = await confirm({ title: "Overwrite Profile", message: `A profile named "${cleanName}" already exists. Overwrite it?`, confirmText: "Overwrite" });
+                if (!overwrite) return;
             }
 
             await set(ref(database, `users/${user.uid}/layouts/${cleanName}`), pagesData);
             await set(ref(database, `users/${user.uid}/profiles/${cleanName}`), { name: cleanName, aircraftTag: existingTag });
-            
             setCurrentProfile(cleanName);
             setIsProfileModalOpen(false);
             setIsEditMode(true);
@@ -386,14 +337,21 @@ function App() {
     };
 
     const handleRenameProfile = async () => {
-        if (currentProfile === "Default") return window.alert("The 'Default' profile cannot be renamed.");
-        let newName = window.prompt(`Rename Profile\nRename "${currentProfile}" to:`, currentProfile);
+        if (currentProfile === "Default") {
+            await confirm({ title: "Action Not Allowed", message: "The 'Default' profile cannot be renamed.", cancelText: null, confirmText: "OK" });
+            return;
+        }
+
+        let newName = await prompt({ title: "Rename Profile", message: `Rename "${currentProfile}" to:`, defaultValue: currentProfile });
         if (newName && newName.trim() !== "" && newName.trim() !== currentProfile) {
             let cleanName = newName.trim();
             let existingTag = availableProfiles[currentProfile]?.aircraftTag || "Global";
+            
             if (availableProfiles[cleanName]) {
-                if (!window.confirm(`A profile named "${cleanName}" already exists. Overwrite it?`)) return;
+                const overwrite = await confirm({ title: "Overwrite Profile", message: `A profile named "${cleanName}" already exists. Overwrite it?`, confirmText: "Overwrite" });
+                if (!overwrite) return;
             }
+
             let oldName = currentProfile;
             await set(ref(database, `users/${user.uid}/layouts/${cleanName}`), pagesData);
             await set(ref(database, `users/${user.uid}/profiles/${cleanName}`), { name: cleanName, aircraftTag: existingTag });
@@ -405,8 +363,13 @@ function App() {
     };
 
     const handleDeleteProfile = async () => {
-        if (currentProfile === "Default") return window.alert("The 'Default' profile cannot be deleted.");
-        if (window.confirm(`Delete Profile\nAre you absolutely sure you want to delete "${currentProfile}"?`)) {
+        if (currentProfile === "Default") {
+            await confirm({ title: "Action Not Allowed", message: "The 'Default' profile cannot be deleted.", cancelText: null, confirmText: "OK" });
+            return;
+        }
+
+        const isConfirmed = await confirm({ title: "Delete Profile", message: `Are you absolutely sure you want to delete "${currentProfile}"?`, confirmText: "Delete" });
+        if (isConfirmed) {
             let oldName = currentProfile;
             setCurrentProfile("Default");
             setCurrentPage(0);
@@ -417,32 +380,37 @@ function App() {
     };
 
     const handleShareProfile = async () => {
-        let tag = window.prompt("Share Profile\nAdd an Aircraft Tag:", availableProfiles[currentProfile]?.aircraftTag || "General Aviation");
+        let tag = await prompt({ title: "Share Profile", message: "Add an Aircraft Tag:", defaultValue: availableProfiles[currentProfile]?.aircraftTag || "General Aviation" });
         if (tag === null) return;
+        
         const shareCode = "SH-" + Math.random().toString(36).substring(2, 8).toUpperCase();
         const exportPayload = { layoutData: pagesData, aircraftTag: tag.trim() || "Global" };
         try {
             await set(ref(database, `efb_shared_profiles/${shareCode}`), exportPayload);
-            window.prompt("Profile Shared!\nCopy this Share Code:", shareCode);
+            // Reusing the prompt purely so the user can easily copy/paste the share code!
+            await prompt({ title: "Profile Shared!", message: "Copy this Share Code:", defaultValue: shareCode, cancelText: null, confirmText: "Done" });
         } catch (e) {
-            window.alert("Error sharing profile. Check Firebase permissions.");
+            await confirm({ title: "Error", message: "Error sharing profile. Check Firebase permissions.", cancelText: null, confirmText: "OK" });
         }
     };
 
     const handleImportProfile = async () => {
-        let code = window.prompt("Import Profile\nEnter the Share Code (e.g. SH-A1B2C3):");
+        let code = await prompt({ title: "Import Profile", message: "Enter the Share Code (e.g. SH-A1B2C3):" });
         if (!code) return;
         code = code.trim().toUpperCase();
         const snapshot = await get(ref(database, `efb_shared_profiles/${code}`));
+        
         if (snapshot.exists()) {
             const importedPayload = snapshot.val();
             const layoutDataToImport = importedPayload.layoutData || importedPayload;
             const importedTag = importedPayload.aircraftTag || "Imported Profile";
-            let newName = window.prompt(`Save Imported Profile\nFound profile for: [${importedTag}]\nSave as:`, `${importedTag} Setup`);
+            
+            let newName = await prompt({ title: "Save Imported Profile", message: `Found profile for: [${importedTag}]\nSave as:`, defaultValue: `${importedTag} Setup` });
             if (newName && newName.trim() !== "") {
                 let cleanName = newName.trim();
                 if (availableProfiles[cleanName]) {
-                    if (!window.confirm(`A profile named "${cleanName}" already exists. Overwrite?`)) return;
+                    const overwrite = await confirm({ title: "Overwrite Profile", message: `A profile named "${cleanName}" already exists. Overwrite?`, confirmText: "Overwrite" });
+                    if (!overwrite) return;
                 }
                 await set(ref(database, `users/${user.uid}/layouts/${cleanName}`), layoutDataToImport);
                 await set(ref(database, `users/${user.uid}/profiles/${cleanName}`), { name: cleanName, aircraftTag: importedTag });
@@ -450,14 +418,16 @@ function App() {
                 setCurrentPage(0);
                 setIsProfileModalOpen(false);
                 setIsEditMode(true); 
-                window.alert("Profile imported successfully!");
+                await confirm({ title: "Success", message: "Profile imported successfully!", cancelText: null, confirmText: "OK" });
             }
         } else {
-            window.alert("Invalid or expired Share Code.");
+            await confirm({ title: "Error", message: "Invalid or expired Share Code.", cancelText: null, confirmText: "OK" });
         }
     };
 
-    // --- RENDER PREP ---
+    // ==========================================
+    // --- RENDER ---
+    // ==========================================
     let breadcrumbText = "HOME";
     if (currentPage > 0) {
         for (let p = 0; p < 10; p++) {
@@ -472,7 +442,6 @@ function App() {
     if (loading) return <div style={{ color: 'white', padding: '40px', textAlign: 'center' }}>Loading MSFS Panel Builder...</div>;
     if (!user) return <AuthScreen />;
     
-    // --- ADMIN OVERLAY ---
     if (showAdmin) {
         return <AdminDashboard onClose={() => setShowAdmin(false)} />;
     }
