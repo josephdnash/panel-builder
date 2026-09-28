@@ -19,7 +19,9 @@ Bulletproof Variable Handling: Advanced dictionary logic seamlessly parses stand
 
 Theming Engine: Toggle between a sleek "Modern" dark mode or aviation-inspired "Retro" CRT themes (Green, Amber, Blue).
 
+
 Under the Hood
+
 Built for absolute maximum performance, the React architecture is specifically engineered to handle aggressive WebSocket spam without choking the CPU.
 
 Frontend: React (Vite) with heavily optimized React.memo cell rendering to prevent unnecessary DOM updates.
