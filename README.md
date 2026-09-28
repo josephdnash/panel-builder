@@ -1,16 +1,30 @@
-# React + Vite
+MSFS Web Panel Builder ✈️
+A highly optimized, web-based electronic flight bag (EFB) and custom panel builder for Microsoft Flight Simulator.
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Designed to run beautifully on iPads, tablets, or secondary monitors, this application allows flight simulation enthusiasts to build, customize, and share interactive instrument panels without writing a single line of code. By connecting to MSFS via a high-frequency WebSocket relay, the Panel Builder provides zero-latency telemetry to custom gauges, switches, and dials.
 
-Currently, two official plugins are available:
+Whether you need a simple button box for a Cessna 172 or a complex, multi-page FMC setup for an airliner, this tool provides a drag-and-drop canvas to make it happen.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Key Features
+Real-Time Telemetry: Consumes 20Hz background data streams from MSFS to drive live gauges, active CSS toggle states, and numeric readouts.
 
-## React Compiler
+Visual Layout Editor: A drag-and-drop grid system supporting dynamic pagination, nested folders, and custom component creation.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Cloud Synchronization: Authenticated users can save their aircraft-specific layouts to the cloud via Firebase, ensuring panels are accessible across any device.
 
-## Expanding the ESLint configuration
+Community Sharing: Generate unique "Share Codes" to instantly export and import panel layouts with the global flight sim community.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Bulletproof Variable Handling: Advanced dictionary logic seamlessly parses standard SimVars and custom L-Vars with automatic case-correction and fallback rendering.
+
+Theming Engine: Toggle between a sleek "Modern" dark mode or aviation-inspired "Retro" CRT themes (Green, Amber, Blue).
+
+Under the Hood
+Built for absolute maximum performance, the React architecture is specifically engineered to handle aggressive WebSocket spam without choking the CPU.
+
+Frontend: React (Vite) with heavily optimized React.memo cell rendering to prevent unnecessary DOM updates.
+
+Backend: Firebase Authentication & Realtime Database.
+
+Optimization: Custom debounced cloud-saving hooks protect the database from rate limits during rapid user inputs.
+
+Testing: Comprehensive unit test coverage via Vitest and JSDOM, mocking WebSocket connections to guarantee flawless data handling.
