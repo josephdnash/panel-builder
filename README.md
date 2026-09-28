@@ -1,5 +1,7 @@
 MSFS Web Panel Builder ✈️
 
+https://centennial-simulations.com/panel-builder/
+
 A highly optimized, web-based electronic flight bag (EFB) and custom panel builder for Microsoft Flight Simulator.
 
 Designed to run beautifully on iPads, tablets, or secondary monitors, this application allows flight simulation enthusiasts to build, customize, and share interactive instrument panels without writing a single line of code. By connecting to MSFS via a high-frequency WebSocket relay, the Panel Builder provides zero-latency telemetry to custom gauges, switches, and dials.
